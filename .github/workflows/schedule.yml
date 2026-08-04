@@ -1,0 +1,33 @@
+name: Update Shop-e-Dom articles (Elementor)
+
+on:
+  schedule:
+    # Toutes les heures entre 20h et 5h du matin, heure de Paris.
+    # 20h-5h Paris = 18h-2h UTC en heure d'été (CEST, UTC+2, en vigueur en août).
+    # En heure d'hiver (CET, UTC+1, fin oct. à fin mars), décaler chaque
+    # borne d'1h : remplacer "18-23,0-2" par "19-23,0-3".
+    - cron: "0 18-23 * * *"  # 20h à 1h du matin Paris
+    - cron: "0 0-2 * * *"    # 2h à 4h du matin Paris
+  workflow_dispatch: {}   # permet de déclencher le run manuellement depuis GitHub
+
+jobs:
+  update-articles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run update script
+        env:
+          WP_SHOP_URL: ${{ secrets.WP_SHOP_URL }}
+          WP_SHOP_USER: ${{ secrets.WP_SHOP_USER }}
+          WP_SHOP_APP_PASSWORD: ${{ secrets.WP_SHOP_APP_PASSWORD }}
+        run: python src/update_article.py
