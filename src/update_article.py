@@ -178,12 +178,28 @@ def wp_session():
     return s
 
 
-def fetch_raw_content(base_url: str, post_id: int, session: requests.Session) -> str:
+def fetch_post_edit(base_url: str, post_id: int, session: requests.Session) -> dict:
     url = f"{base_url.rstrip('/')}/wp-json/wp/v2/posts/{post_id}"
     r = session.get(url, params={"context": "edit"}, timeout=30)
     r.raise_for_status()
-    data = r.json()
-    return data["content"]["raw"]
+    return r.json()
+
+
+def is_already_elementor(post_data: dict) -> bool:
+    """
+    Détecte si l'article est déjà construit avec Elementor, pour éviter de
+    l'écraser inutilement à chaque run :
+      - meta._elementor_edit_mode == "builder" (cas normal), ou
+      - à défaut (meta non exposée), présence de marqueurs Elementor dans le
+        HTML déjà rendu (data-elementor-type / elementor-element).
+    """
+    meta = post_data.get("meta", {}) or {}
+    if meta.get("_elementor_edit_mode") == "builder":
+        return True
+    rendered = (post_data.get("content", {}) or {}).get("rendered", "") or ""
+    if "data-elementor-type" in rendered or "elementor-element" in rendered:
+        return True
+    return False
 
 
 def update_post_elementor(base_url: str, post_id: int, elementor_data: list, session: requests.Session):
@@ -227,7 +243,13 @@ def main():
     for post_id in article_ids:
         try:
             print(f"--- Article {post_id} ---")
-            raw_html = fetch_raw_content(base_url, post_id, session)
+            post_data = fetch_post_edit(base_url, post_id, session)
+
+            if is_already_elementor(post_data):
+                print(f"Article {post_id} déjà en Elementor — ignoré (aucune écriture).")
+                continue
+
+            raw_html = post_data["content"]["raw"]
             blocks = split_into_blocks(raw_html)
             elementor_data = build_elementor_data(blocks)
             update_post_elementor(base_url, post_id, elementor_data, session)
